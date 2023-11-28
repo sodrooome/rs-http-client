@@ -11,7 +11,7 @@ use serde_json::json;
 #[tokio::main]
 async fn main() {
     let base_url = "https://jsonplaceholder.typicode.com";
-    let http_request = HttpRequest::new(base_url);
+    let http_request = HttpRequest::new(base_url, false);
     
     // use the request builder and prepare request
     let prepare_request = http_request.prepare_get("/posts/1");
@@ -74,7 +74,7 @@ async fn main() {
     // prompt the authentication with bearer token
     let base_auth_url = "https://httpbin.org";
     // let auth_request = http_request.get("/bearer");
-    let http_auth_request = HttpRequest::new(base_auth_url);
+    let http_auth_request = HttpRequest::new(base_auth_url, false);
     let auth_response = http_auth_request
         .bearer_token(reqwest::Method::GET, "1234", "/bearer")
         .send()

@@ -15,11 +15,12 @@ pub struct HttpRequest {
     client: Client,
     base_url: Url,
     timeout: Duration,
+    logging: bool,
 }
 
 #[allow(dead_code)]
 impl HttpRequest {
-    pub fn new(base_url: &str) -> Self {
+    pub fn new(base_url: &str, logging: bool) -> Self {
         let client = Client::new();
         let base_url = Url::parse(base_url).expect("Given the invalid argument for Base URL");
         let timeout = Duration::from_secs(30);
@@ -28,6 +29,7 @@ impl HttpRequest {
             client,
             base_url,
             timeout,
+            logging,
         }
     }
 
@@ -69,10 +71,20 @@ impl HttpRequest {
         &self,
         request: RequestBuilder,
     ) -> Result<Response, HttpRequestError> {
-        request
+        if self.logging {
+            log::info!("HTTP request: {:?}", request);
+        }
+
+        let response = request
             .send()
             .await
-            .map_err(HttpRequestError::RequestBuilderError)
+            .map_err(HttpRequestError::RequestBuilderError)?;
+
+        if self.logging {
+            log::info!("HTTP response: {:?}", response);
+        }
+
+        Ok(response)
     }
 
     pub fn prepare_get(&self, path: &str) -> RequestBuilder {
@@ -162,5 +174,35 @@ impl HttpRequest {
         let body_stream = FramedRead::new(file, BytesCodec::new());
         let body = Body::wrap_stream(body_stream);
         body
+    }
+
+    pub async fn retry_request_builder<F>(
+        &self,
+        request_build_provider: F,
+        max_retries: Option<usize>,
+        backoff: Option<Duration>,
+    ) -> Result<Response, HttpRequestError>
+    where
+        F: Fn() -> RequestBuilder,
+    {
+        let mut retries = 0;
+        let max_retries = max_retries.unwrap_or(3);
+        let backoff = backoff.unwrap_or(Duration::from_secs(1));
+
+        loop {
+            // again, hacky-way. i actually don't know why the clone method
+            // it doesn't appears since i need to moved the closure of RequestBuilder
+            match self.send_request(request_build_provider()).await {
+                Ok(response) => return Ok(response),
+                Err(error) => {
+                    retries += 1;
+                    if retries >= max_retries {
+                        return Err(error);
+                    }
+
+                    tokio::time::sleep(backoff).await;
+                }
+            }
+        }
     }
 }
