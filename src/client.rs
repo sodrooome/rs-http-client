@@ -8,7 +8,7 @@ use std::{collections::HashMap, time::Duration};
 use tokio::fs::File;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
-use crate::HttpRequestError;
+use crate::{HttpRequestError, RequestHook, ResponseHook};
 // use exception::HttpRequestError;
 
 pub struct HttpRequest {
@@ -16,6 +16,8 @@ pub struct HttpRequest {
     base_url: Url,
     timeout: Duration,
     logging: bool,
+    request_hook: Option<Box<dyn RequestHook>>,
+    response_hook: Option<Box<dyn ResponseHook>>,
 }
 
 #[allow(dead_code)]
@@ -30,6 +32,8 @@ impl HttpRequest {
             base_url,
             timeout,
             logging,
+            request_hook: None,
+            response_hook: None,
         }
     }
 
@@ -44,7 +48,19 @@ impl HttpRequest {
         }
         let request = self.client.request(method, url).timeout(self.timeout);
 
+        if let Some(request_hook) = &self.request_hook {
+            request_hook.apply(&request);
+        }
+
         request
+    }
+
+    pub fn set_request_hook(&mut self, request_hook: Box<dyn RequestHook>) {
+        self.request_hook = Some(request_hook);
+    }
+
+    pub fn set_response_hook(&mut self, response_hook: Box<dyn ResponseHook>) {
+        self.response_hook = Some(response_hook);
     }
 
     pub fn get(&self, path: &str) -> RequestBuilder {
@@ -75,7 +91,7 @@ impl HttpRequest {
             log::info!("HTTP request: {:?}", request);
         }
 
-        let response = request
+        let mut response = request
             .send()
             .await
             .map_err(HttpRequestError::RequestBuilderError)?;
@@ -84,25 +100,34 @@ impl HttpRequest {
             log::info!("HTTP response: {:?}", response);
         }
 
+        if let Some(response_hook) = &self.response_hook {
+            response_hook.apply(&response);
+        }
+
         Ok(response)
     }
 
+    #[deprecated(note = "prepare_get rarely used, please use the get instead")]
     pub fn prepare_get(&self, path: &str) -> RequestBuilder {
         self.get(path)
     }
 
+    #[deprecated(note = "prepare_post rarely used, please use the post instead")]
     pub fn prepare_post(&self, path: &str) -> RequestBuilder {
         self.post(path)
     }
 
+    #[deprecated(note = "prepare_delete rarely used, please use the delete instead")]
     pub fn prepare_delete(&self, path: &str) -> RequestBuilder {
         self.delete(path)
     }
 
+    #[deprecated(note = "prepare_patch rarely used, please use the patch instead")]
     pub fn prepare_patch(&self, path: &str) -> RequestBuilder {
         self.patch(path)
     }
 
+    #[deprecated(note = "prepare_put rarely used, please use the put instead")]
     pub fn prepare_put(&self, path: &str) -> RequestBuilder {
         self.put(path)
     }

@@ -3,6 +3,8 @@ use serde_json::json;
 #[cfg(test)]
 mod tests {
     use rs_http_request::HttpRequest;
+    use rs_http_request::HttpRequestHook;
+    use rs_http_request::HttpResponseHook;
 
     use super::*;
     use std::collections::HashMap;
@@ -89,7 +91,7 @@ mod tests {
         let max_retries = 3;
         let backoff = Duration::new(3, 0);
 
-        // got weird issue, if the prefix contains "/" 
+        // got weird issue, if the prefix contains "/"
         // it will be removed the previous path
         let response = request
             .retry_request_builder(|| request.get("500"), Some(max_retries), Some(backoff))
@@ -97,5 +99,24 @@ mod tests {
         let resp_body = response.unwrap();
         assert_eq!(resp_body.status(), 500);
         // assert!(response.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_hooks() {
+        let base_url = "https://jsonplaceholder.typicode.com";
+        let mut request = HttpRequest::new(base_url, false);
+
+        // initiate the instances of request-response hook first
+        let request_hook = Box::new(HttpRequestHook);
+        let response_hook = Box::new(HttpResponseHook);
+
+        request.set_request_hook(request_hook);
+
+        let get_request = request.get("/posts/1");
+        let response = request.send_request(get_request).await;
+
+        request.set_response_hook(response_hook);
+
+        assert!(response.is_ok());
     }
 }
