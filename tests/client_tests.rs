@@ -20,6 +20,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_status_code() {
+        let base_url = "https://jsonplaceholder.typicode.com";
+        let request = HttpRequest::new(base_url, false);
+        let get_request = request.get("/posts/1");
+        let status_code = request.status_code(get_request).await;
+        status_code.expect("Successfully to get the status code");
+        // let expected_status_code = reqwest::StatusCode::OK;
+        // assert_eq!(status_code, expected_status_code);
+    }
+
+    #[tokio::test]
     async fn test_failure_request() {
         let base_url = "https://jsonplaceholder.typicode.com";
         let request = HttpRequest::new(base_url, false);

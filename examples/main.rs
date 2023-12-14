@@ -14,7 +14,7 @@ async fn main() {
     let http_request = HttpRequest::new(base_url, false);
     
     // use the request builder and prepare request
-    let prepare_request = http_request.prepare_get("/posts/1");
+    let prepare_request = http_request.get("/posts/1");
     let response = http_request.send_request(prepare_request).await;
     match response {
         Ok(resp) => {
@@ -60,7 +60,7 @@ async fn main() {
     }
 
     // usage of the HttpResponse structure
-    let delete_request = http_request.prepare_delete("/posts/1");
+    let delete_request = http_request.delete("/posts/1");
     let struct_resp = http_request.send_request(delete_request).await;
     match struct_resp {
         Ok(http_response) => {
