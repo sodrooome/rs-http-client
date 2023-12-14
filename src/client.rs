@@ -1,10 +1,15 @@
 // mod exception;
 
+use base64::{engine::general_purpose, Engine as _};
 use core::panic;
+// use base64::Engine;
 use reqwest::{Body, Client, RequestBuilder, Response, Url};
 use serde_json::Value;
 use serde_urlencoded::to_string;
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 use tokio::fs::File;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
@@ -91,7 +96,7 @@ impl HttpRequest {
             log::info!("HTTP request: {:?}", request);
         }
 
-        let mut response = request
+        let response = request
             .send()
             .await
             .map_err(HttpRequestError::RequestBuilderError)?;
@@ -140,12 +145,10 @@ impl HttpRequest {
         path: &str,
     ) -> RequestBuilder {
         let authorization = reqwest::header::AUTHORIZATION;
-        let base64format = format!(
-            "Basic {}",
-            base64::encode(&format!("{}:{}", username, password))
-        );
+        let base64format = general_purpose::STANDARD.encode(&format!("{}:{}", username, password));
+        let auth_format = format!("Basic {}", base64format);
         self.build_request(method, path)
-            .header(authorization, base64format)
+            .header(authorization, auth_format)
     }
 
     pub fn bearer_token(&self, method: reqwest::Method, token: &str, path: &str) -> RequestBuilder {
@@ -229,5 +232,41 @@ impl HttpRequest {
                 }
             }
         }
+    }
+
+    // getter method looks-like that will be returned
+    // each piece of HTTP response information
+    pub async fn status_code(
+        &self,
+        request: RequestBuilder,
+    ) -> Result<reqwest::StatusCode, HttpRequestError> {
+        let response = self.send_request(request).await?;
+        Ok(response.status())
+    }
+
+    pub async fn headers(
+        &self,
+        request: RequestBuilder,
+    ) -> Result<reqwest::header::HeaderMap, HttpRequestError> {
+        let response = self.send_request(request).await?;
+        Ok(response.headers().clone())
+    }
+
+    pub async fn elapsed_time(
+        &self,
+        request: RequestBuilder,
+    ) -> Result<Duration, HttpRequestError> {
+        let start_time = Instant::now();
+        let request_time = self.send_request(request).await?;
+        Ok(start_time.elapsed())
+    }
+
+    pub async fn json(
+        &self,
+        request: RequestBuilder,
+    ) -> Result<Value, HttpRequestError> {
+        let response = self.send_request(request).await?;
+        let resp_body = response.text().await?;
+        serde_json::from_str(&resp_body).map_err(HttpRequestError::JsonError)
     }
 }
